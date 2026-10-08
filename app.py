@@ -1,7 +1,7 @@
 from pathlib import Path
-
+import math
 import pickle
-import pandas as pd
+
 import streamlit as st
 
 st.title("Customer cancellation prediction")
@@ -20,13 +20,15 @@ with st.form("customer_details"):
     submitted = st.form_submit_button("Predict cancellation")
 
 if submitted:
-    inputs = pd.DataFrame([{
-        "tenure": tenure,
-        "MonthlyCharges": charge,
-        "Contract": contract,
-        "InternetService": "No" if internet == "No internet service" else internet,
-    }])
-    probability = model.predict_proba(inputs)[0, 1]
+    service = "No" if internet == "No internet service" else internet
+    values = [
+        (tenure - model["mean"][0]) / model["scale"][0],
+        (charge - model["mean"][1]) / model["scale"][1],
+    ]
+    values += [int(contract == choice) for choice in model["contracts"]]
+    values += [int(service == choice) for choice in model["internet_services"]]
+    score = model["intercept"] + sum(weight * value for weight, value in zip(model["weights"], values))
+    probability = 1 / (1 + math.exp(-score))
     st.metric("Estimated chance of cancellation", f"{probability:.1%}")
     st.write("Predicted outcome:", "Likely to cancel" if probability >= 0.5 else "Likely to stay")
     st.caption("This is a model estimate based on sample data, not a certainty.")
