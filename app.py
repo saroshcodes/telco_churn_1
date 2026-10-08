@@ -1,13 +1,17 @@
 from pathlib import Path
-import math
 import pickle
 
+import pandas as pd
 import streamlit as st
 
 st.title("Customer cancellation prediction")
 st.write("Enter a customer's subscription details to estimate their chance of cancelling.")
-with Path(__file__).with_name("model.pkl").open("rb") as file:
-    model = pickle.load(file)
+try:
+    with Path(__file__).with_name("model.pkl").open("rb") as file:
+        model = pickle.load(file)
+except ModuleNotFoundError as error:
+    st.error(f"Missing model dependency: {error.name}. Upload requirements.txt and rebuild the app.")
+    st.stop()
 
 with st.form("customer_details"):
     tenure = st.number_input("Customer tenure (months)", min_value=0, max_value=72, value=12)
@@ -20,15 +24,13 @@ with st.form("customer_details"):
     submitted = st.form_submit_button("Predict cancellation")
 
 if submitted:
-    service = "No" if internet == "No internet service" else internet
-    values = [
-        (tenure - model["mean"][0]) / model["scale"][0],
-        (charge - model["mean"][1]) / model["scale"][1],
-    ]
-    values += [int(contract == choice) for choice in model["contracts"]]
-    values += [int(service == choice) for choice in model["internet_services"]]
-    score = model["intercept"] + sum(weight * value for weight, value in zip(model["weights"], values))
-    probability = 1 / (1 + math.exp(-score))
+    inputs = pd.DataFrame([{
+        "tenure": tenure,
+        "MonthlyCharges": charge,
+        "Contract": contract,
+        "InternetService": "No" if internet == "No internet service" else internet,
+    }])
+    probability = model.predict_proba(inputs)[0, 1]
     st.metric("Estimated chance of cancellation", f"{probability:.1%}")
     st.write("Predicted outcome:", "Likely to cancel" if probability >= 0.5 else "Likely to stay")
     st.caption("This is a model estimate based on sample data, not a certainty.")
